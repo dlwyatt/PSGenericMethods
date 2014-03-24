@@ -1,230 +1,12 @@
-function Get-GenericParameterRuntimeType
-{
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [Type]
-        $ParameterType,
-
-        [Parameter(Mandatory = $true)]
-        [Type[]]
-        $RuntimeType,
-
-        [Parameter(Mandatory = $true)]
-        [Type[]]
-        $GenericType
-    )
-
-    for ($i = 0; $i -lt $GenericType.Count; $i++)
-    {
-        if ($ParameterType -eq $GenericType[$i])
-        {
-            return $RuntimeType[$i]
-        }
-    }
-}
-
-function Get-GenericMethod
-{
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [Type]
-        $Type,
-
-        [Parameter(Mandatory = $true)]
-        [string]
-        $MethodName,
-
-        [Parameter(Mandatory = $true)]
-        [Type[]]
-        $GenericType,
-
-        [Object[]]
-        $ArgumentList = @(),
-
-        [System.Reflection.BindingFlags]
-        $BindingFlags = [System.Reflection.BindingFlags]::Default,
-
-        [switch]
-        $WithCoercion
-    )
-
-    foreach ($method in $Type.GetMethods($BindingFlags))
-    {
-        if (-not $method.IsGenericMethod -or $method.Name -ne $MethodName) { continue }
-        if ($GenericType.Count -ne $method.GetGenericArguments().Count) { continue }
-
-        $parameters = @($method.GetParameters())
-
-        # TODO: This may not account for optional parameters with default values.  Need to check on that later.
-        if ($parameters.Count -ne $ArgumentList.Count) { continue }
-
-        $isMatch = $true
-
-        for ($i = 0; $i -lt $parameters.Count; $i++)
-        {
-            if ($parameters[$i].ParameterType.IsGenericParameter)
-            {
-                $params = @{
-                    ParameterType = $parameters[$i].ParameterType
-                    RuntimeType   = $GenericType
-                    GenericType   = $method.GetGenericArguments()
-                }
-
-                $runtimeType = Get-GenericParameterRuntimeType @params
-
-                if ($null -eq $runtimeType)
-                {
-                    Write-Error "Could not runtime type of parameter $($parameters[$i].Name)"
-                    return
-                }
-            }
-            else
-            {
-                $runtimeType = $parameters[$i].ParameterType
-            }
-            
-
-            if ($runtimeType.FullName -like 'System.Nullable``1*')
-            {
-                # TODO: This can probably be refactored so there's not duplicate coercion code.  Right now this is separate because
-                # System.Nullable is a struct (IsValueType = $true), and the first version code considers $null arguments to be
-                # a mismatch if the parameter's type is a Value type.
-
-                $nullableType = $runtimeType.GetGenericArguments()[0]
-
-                if ($null -eq $ArgumentList[$i] -or $ArgumentList[$i].GetType() -eq $nullableType)
-                {
-                    continue
-                }
-
-                $coercedValue = $ArgumentList[$i] -as $nullableType
-
-                if (-not $WithCoercion -or $null -eq $coercedValue)
-                {
-                    $isMatch = $false
-                    break
-                }
-
-                $ArgumentList[$i] = $coercedValue
-            }
-            else
-            {
-                if ($null -eq $ArgumentList[$i])
-                {
-                    if ($runtimeType.IsValueType)
-                    {
-                        $isMatch = $false
-                        break
-                    }
-                }
-                else
-                {
-                    # TODO:  Test to see if we need special code here for parameters that are themselves instances of generic types (for coercion)
-
-                    if ($ArgumentList[$i].GetType() -eq $runtimeType) { continue }
-
-                    $coercedValue = $ArgumentList[$i] -as $runtimeType
-                    if (-not $WithCoercion -or $null -eq $coercedValue)
-                    {
-                        $isMatch = $false
-                        break
-                    }
-
-                    $ArgumentList[$i] = $coercedValue
-                }                    
-            }
-
-        } # for ($i = 0; $i -lt $parameters.Count; $i++)
-
-        if ($isMatch)
-        {
-            return $method.MakeGenericMethod($GenericType)
-        }
-
-    } # foreach ($method in $Type.GetMethods($BindingFlags))
-
-    if (-not $WithCoercion)
-    {
-        $null = $PSBoundParameters.Remove('WithCoercion')
-        return Get-GenericMethod @PSBoundParameters -WithCoercion
-    }
-
-} # function Get-GenericMethod
-
-function Invoke-GenericMethod
-{
-    [CmdletBinding(DefaultParameterSetName = 'Instance')]
-    param (
-        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = 'Instance')]
-        $InputObject,
-
-        [Parameter(Mandatory = $true, ParameterSetName = 'Static')]
-        [Type]
-        $Type,
-
-        [Parameter(Mandatory = $true)]
-        [string]
-        $MethodName,
-
-        [Parameter(Mandatory = $true)]
-        [Type[]]
-        $GenericType,
-
-        [Object[]]
-        $ArgumentList = @()
-    )
-
-    process
-    {
-        switch ($PSCmdlet.ParameterSetName)
-        {
-            'Instance'
-            {
-                $_type  = $InputObject.GetType()
-                $object = $InputObject
-                $flags  = [System.Reflection.BindingFlags] 'Instance, Public'
-            }
-
-            'Static'
-            {
-                $_type  = $Type
-                $object = $null
-                $flags  = [System.Reflection.BindingFlags] 'Static, Public'
-            }
-        }
-
-        $argList = $argumentList.Clone()
-
-        $params = @{
-            Type         = $_type
-            BindingFlags = $flags
-            MethodName   = $MethodName
-            GenericType  = $GenericType
-            ArgumentList = $argList
-        }
-
-        $method = Get-GenericMethod @params
-
-        if ($null -eq $method)
-        {
-            Write-Error "No matching method was found"
-            return
-        }
-
-        return $method.Invoke($object, $argList)
-
-    } # process
-
-} # function Invoke-GenericMethod
-
 #
 # Test Code
 #
 
+Import-Module -Name .\PSGenericMethods.psm1 -Force
+
 $cSharp = @'
     using System.Management.Automation;
+    using System.Collections.Generic;
 
     public class TestClass
     {
@@ -248,6 +30,33 @@ $cSharp = @'
         {
             return default(TOut);
         }
+
+        public static string DefaultParameterTest<T> (string required, string optional = "Default value")
+        {
+            return string.Format("'{0}', '{1}'", required, optional);
+        }
+
+        public static string GenericTypeParameterTest<T> (List<T> parameter)
+        {
+            return "GenericTypeParameterTest: " + parameter.ToString();
+        }
+
+        public static string GenericTypeParameterTest2<T> (List<string> parameter)
+        {
+            return "GenericTypeParameterTest: " + parameter.ToString();
+        }
+
+        public static string GenericTypeParameterTest3<T> (List<List<T>> parameter)
+        {
+            return "GenericTypeParameterTest: " + parameter.ToString();
+        }
+
+        public static string NonGenericTest(List<string> list)
+        {
+            if (null == list) { return string.Empty; }
+
+            return string.Join("\r\n", list.ToArray());
+        }
     }
 '@
 
@@ -258,12 +67,32 @@ cls
 $VerbosePreference = 'Continue'
 
 Write-Verbose "Testing Static Method"
-Invoke-GenericMethod -Type testClass -GenericType String -ArgumentList ('StaticTest', 12345) -MethodName StaticCreateObject | Out-Host
+Invoke-GenericMethod -Type TestClass -GenericType int -ArgumentList ('StaticTest', '12345') -MethodName StaticCreateObject | Out-Host
 
 Write-Verbose 'Testing instance method'
 $test = New-Object TestClass
-$test | Invoke-GenericMethod -GenericType String -ArgumentList ('InstanceTest', 67890) -MethodName CreateObject | Out-Host
+$test | Invoke-GenericMethod -GenericType string -ArgumentList ('InstanceTest', 67890) -MethodName CreateObject | Out-Host
 
 Write-Verbose "Testing Static Method 2"
-Invoke-GenericMethod -Type testClass -GenericType String, Boolean -ArgumentList (11235, 'Ignore') -MethodName StaticCreateObject | Out-Host
+Invoke-GenericMethod -Type TestClass -GenericType string,bool -ArgumentList ($null, 'Ignore') -MethodName StaticCreateObject | Out-Host
 
+Write-Verbose "Testing method with default values (all arguments passed.)"
+Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList ('Required Parameter', 'Optional Parameter') -MethodName DefaultParameterTest | Out-Host
+
+Write-Verbose "Testing method with default values (optional parameter left to default)"
+Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList ('Required Parameter') -MethodName DefaultParameterTest | Out-Host
+
+Write-Verbose "Testing method with generic parameters"
+$list = New-Object System.Collections.Generic.List[string]
+$list.Add("This is a test.")
+$list.Add("Line Two.")
+Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList (,$list) -MethodName GenericTypeParameterTest | Out-Host
+
+Write-Verbose "Testing non-generic method with generic parameters"
+
+# Verifying that the exception we're getting from Invoke when the method has a generic type argument is not caused by Invoke-GenericMethod specific code,
+# but affects all calls to methods with signatures like this.  Still need to figure out if there's a way to fix this.  Possibly by rewriting the Invoke-GenericMethod
+# function as a C# cmdlet (which would perform better anyway.)
+
+$method = [TestClass].GetMethod('NonGenericTest')
+$method.Invoke($null, (,$list))
