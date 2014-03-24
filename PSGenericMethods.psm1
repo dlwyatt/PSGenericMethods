@@ -38,6 +38,7 @@ function Invoke-GenericMethod
 
        This happens even when calling non-generic methods that contain generic type arguments via Reflection from PowerShell, such as:  static object SomeMethodName(List<string> list);
     #>
+
     [CmdletBinding(DefaultParameterSetName = 'Instance')]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true, ParameterSetName = 'Instance')]
@@ -96,12 +97,11 @@ function Invoke-GenericMethod
             return
         }
 
-        # Generic type arguments appear to be resolving to runtime types properly, but calling Invoke() is throwing the following error:
-        # Exception calling "Invoke" with "2" argument(s): "Object of type 'System.Management.Automation.PSObject' cannot be converted to type 'System.Collections.Generic.List`1[System.String]'."
+        # I'm not sure why, but PowerShell appears to be passing instances of PSObject when $argList contains generic types.  Instead of calling
+        # $method.Invoke here from PowerShell, I had to write the PSGenericMethods.MethodInvoker.InvokeMethod helper code in C# to enumerate the
+        # argument list and replace any instances of PSObject with their BaseObject before calling $method.Invoke().
 
-        # Not sure why, yet.  I've verified that $argList is an object[] array, and that $argList[0].GetType().FullName corresponds to a List[string] object in testing.
-
-        return $method.Invoke($object, $argList)
+        return [PSGenericMethods.MethodInvoker]::InvokeMethod($method, $object, $argList)
 
     } # process
 
@@ -299,5 +299,39 @@ function Resolve-RuntimeType
         return $ParameterType
     }
 }
+
+Add-Type -ErrorAction Stop -TypeDefinition @'
+    namespace PSGenericMethods
+    {
+        using System;
+        using System.Reflection;
+        using System.Management.Automation;
+
+        public static class MethodInvoker
+        {
+            public static object InvokeMethod(MethodInfo method, object target, object[] arguments)
+            {
+                if (method == null) { throw new ArgumentNullException("method"); }
+
+                object[] args = null;
+
+                if (arguments != null)
+                {
+                    args = (object[])arguments.Clone();
+                    for (int i = 0; i < args.Length; i++)
+                    {
+                        PSObject pso = args[i] as PSObject;
+                        if (pso != null)
+                        {
+                            args[i] = pso.BaseObject;
+                        }
+                    }
+                }
+
+                return method.Invoke(target, args);
+            }
+        }
+    }
+'@
 
 Export-ModuleMember -Function 'Invoke-GenericMethod'
