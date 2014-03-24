@@ -244,7 +244,7 @@ $cSharp = @'
             return o;
         }
 
-        public static TOut StaticParameterlessCreateObject<TIn, TOut> (int? nullableTest, TIn ignore)
+        public static TOut StaticCreateObject<TIn, TOut> (int? nullableTest, TIn ignore)
         {
             return default(TOut);
         }
@@ -262,5 +262,8 @@ Invoke-GenericMethod -Type testClass -GenericType String -ArgumentList ('StaticT
 
 Write-Verbose 'Testing instance method'
 $test = New-Object TestClass
-
 $test | Invoke-GenericMethod -GenericType String -ArgumentList ('InstanceTest', 67890) -MethodName CreateObject | Out-Host
+
+Write-Verbose "Testing Static Method 2"
+Invoke-GenericMethod -Type testClass -GenericType String, Boolean -ArgumentList (11235, 'Ignore') -MethodName StaticCreateObject | Out-Host
+
