@@ -1,3 +1,5 @@
+#requires -Version 2.0
+
 function Invoke-GenericMethod
 {
     <#
@@ -31,12 +33,6 @@ function Invoke-GenericMethod
        System.Object
     .OUTPUTS
        System.Object
-    .NOTES
-       There are currently issues calling methods that contain arguments that are themselves Generic types.  While the functions resolve the runtime types of these generic arguments properly, invoking the method gives the following type of error:
-
-       Exception calling "Invoke" with "2" argument(s): "Object of type 'System.Management.Automation.PSObject' cannot be converted to type 'System.Collections.Generic.List`1[System.String]'."
-
-       This happens even when calling non-generic methods that contain generic type arguments via Reflection from PowerShell, such as:  static object SomeMethodName(List<string> list);
     #>
 
     [CmdletBinding(DefaultParameterSetName = 'Instance')]
