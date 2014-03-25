@@ -170,6 +170,7 @@ function Test-GenericMethodParameters
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [System.Reflection.ParameterInfo[]]
         $ParameterList,
 

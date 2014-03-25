@@ -73,6 +73,23 @@ $cSharp = @'
             sparam = "Out Value";
             return String.Format("RefParameterTest: '{0}'", originalValue); 
         }
+
+        public static string NullableRefTest<T>(ref int? parameter)
+        {
+            string message;
+
+            if (parameter.HasValue)
+            {
+                message = String.Format("NullableRefTest: OriginalValue '{0}'", parameter.Value);
+            }
+            else
+            {
+                message = "NullableRefTest: OriginalValue null";
+            }
+
+            parameter = 5;
+            return message;
+        }
     }
 '@
 
@@ -121,5 +138,12 @@ $int = 5L
 $string = "Before Method Call."
 $args = ([ref]$int, [ref]$string)
 Invoke-GenericMethod -Type TestClass -MethodName RefParameterTest -GenericType int -ArgumentList $args
+
+Write-Host "int: '$int', string: '$string'"
+
+Write-Verbose "Testing method with nullable ref parameter."
+$int = $null
+$args = (,[ref]$int)
+Invoke-GenericMethod -Type TestClass -MethodName NullableRefTest -GenericType int -ArgumentList $args
 
 Write-Host "int: '$int', string: '$string'"
