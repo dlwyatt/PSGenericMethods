@@ -5,6 +5,7 @@
 Import-Module -Name .\PSGenericMethods.psm1 -Force
 
 $cSharp = @'
+    using System;
     using System.Management.Automation;
     using System.Collections.Generic;
 
@@ -57,42 +58,52 @@ $cSharp = @'
 
             return string.Join("\r\n", list.ToArray());
         }
+
+        public static string ArrayParameterTest<T>(T[] parameter)
+        {
+            if (parameter == null) { throw new ArgumentException("parameter"); }
+            return parameter.GetType().FullName;
+        }
     }
 '@
 
 Add-Type -TypeDefinition $cSharp
 
-cls
+#cls
 
 $VerbosePreference = 'Continue'
 
-Write-Verbose "Testing Static Method"
-Invoke-GenericMethod -Type TestClass -GenericType int -ArgumentList ('StaticTest', '12345') -MethodName StaticCreateObject | Out-Host
+#Write-Verbose "Testing Static Method"
+#Invoke-GenericMethod -Type TestClass -GenericType int -ArgumentList ('StaticTest', '12345') -MethodName StaticCreateObject | Out-Host
+#
+#Write-Verbose 'Testing instance method'
+#$test = New-Object TestClass
+#$test | Invoke-GenericMethod -GenericType string -ArgumentList ('InstanceTest', 67890) -MethodName CreateObject | Out-Host
+#
+#Write-Verbose "Testing Static Method 2"
+#Invoke-GenericMethod -Type TestClass -GenericType string,bool -ArgumentList ($null, 'Ignore') -MethodName StaticCreateObject | Out-Host
+#
+#Write-Verbose "Testing method with default values (all arguments passed.)"
+#Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList ('Required Parameter', 'Optional Parameter') -MethodName DefaultParameterTest | Out-Host
+#
+#Write-Verbose "Testing method with default values (optional parameter left to default)"
+#Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList ('Required Parameter') -MethodName DefaultParameterTest | Out-Host
+#
+#Write-Verbose "Testing method with generic parameters"
+#$list = New-Object System.Collections.Generic.List[string]
+#$list.Add("This is a test.")
+#$list.Add("Line Two.")
+#Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList (,$list) -MethodName GenericTypeParameterTest | Out-Host
+#
+#Write-Verbose "Testing non-generic method with generic parameters"
+#
+## Verifying that the exception we're getting from Invoke when the method has a generic type argument is not caused by Invoke-GenericMethod specific code,
+## but affects all calls to methods with signatures like this.  Still need to figure out if there's a way to fix this.  Possibly by rewriting the Invoke-GenericMethod
+## function as a C# cmdlet (which would perform better anyway.)
+#
+#$method = [TestClass].GetMethod('NonGenericTest')
+#$method.Invoke($null, (,$list))
+#
 
-Write-Verbose 'Testing instance method'
-$test = New-Object TestClass
-$test | Invoke-GenericMethod -GenericType string -ArgumentList ('InstanceTest', 67890) -MethodName CreateObject | Out-Host
-
-Write-Verbose "Testing Static Method 2"
-Invoke-GenericMethod -Type TestClass -GenericType string,bool -ArgumentList ($null, 'Ignore') -MethodName StaticCreateObject | Out-Host
-
-Write-Verbose "Testing method with default values (all arguments passed.)"
-Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList ('Required Parameter', 'Optional Parameter') -MethodName DefaultParameterTest | Out-Host
-
-Write-Verbose "Testing method with default values (optional parameter left to default)"
-Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList ('Required Parameter') -MethodName DefaultParameterTest | Out-Host
-
-Write-Verbose "Testing method with generic parameters"
-$list = New-Object System.Collections.Generic.List[string]
-$list.Add("This is a test.")
-$list.Add("Line Two.")
-Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList (,$list) -MethodName GenericTypeParameterTest | Out-Host
-
-Write-Verbose "Testing non-generic method with generic parameters"
-
-# Verifying that the exception we're getting from Invoke when the method has a generic type argument is not caused by Invoke-GenericMethod specific code,
-# but affects all calls to methods with signatures like this.  Still need to figure out if there's a way to fix this.  Possibly by rewriting the Invoke-GenericMethod
-# function as a C# cmdlet (which would perform better anyway.)
-
-$method = [TestClass].GetMethod('NonGenericTest')
-$method.Invoke($null, (,$list))
+[int[]] $array = 1,2,3,4,5
+Invoke-GenericMethod -Type TestClass -MethodName ArrayParameterTest -GenericType int -ArgumentList (,$array)

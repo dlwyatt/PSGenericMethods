@@ -272,6 +272,27 @@ function Resolve-RuntimeType
             }
         }
     }
+    elseif ($ParameterType.IsArray)
+    {
+        $arrayType = $ParameterType
+        $elementType = Resolve-RuntimeType -ParameterType $ParameterType.GetElementType() -RuntimeType $RuntimeType -GenericType $GenericType
+
+        if ($ParameterType.GetElementType().IsGenericParameter)
+        {
+            $arrayRank = $arrayType.GetArrayRank()
+
+            if ($arrayRank -eq 1)
+            {
+                $arrayType = $elementType.MakeArrayType()
+            }
+            else
+            {
+                $arrayType = $elementType.MakeArrayType($arrayRank)
+            }
+        }
+
+        return $arrayType
+    }
     elseif ($ParameterType.ContainsGenericParameters)
     {
         $genericArguments = $ParameterType.GetGenericArguments()
