@@ -90,6 +90,11 @@ $cSharp = @'
             parameter = 5;
             return message;
         }
+
+        public static string EmptyParameterListTest<T>()
+        {
+            return "Empty Parameter List";
+        }
     }
 '@
 
@@ -147,3 +152,6 @@ $args = (,[ref]$int)
 Invoke-GenericMethod -Type TestClass -MethodName NullableRefTest -GenericType int -ArgumentList $args
 
 Write-Host "int: '$int', string: '$string'"
+
+Write-Verbose "Testing method with empty parameter list."
+Invoke-GenericMethod -Type TestClass -MethodName EmptyParameterListTest -GenericType int
