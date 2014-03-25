@@ -33,6 +33,11 @@ function Invoke-GenericMethod
        System.Object
     .OUTPUTS
        System.Object
+    .NOTES
+       Known issues:
+
+       Ref / Out parameters and [PSReference] objects are currently not working properly, and I don't think there's a way to fix that from within PowerShell.  I'll have to expand on the
+       PSGenericTypes.MethodInvoker.InvokeMethod() C# code to account for that.
     #>
 
     [CmdletBinding(DefaultParameterSetName = 'Instance')]
@@ -204,29 +209,62 @@ function Test-GenericMethodParameters
         {
             throw "Could not determine runtime type of parameter '$($ParameterList[$i].Name)'"
         }
-            
-        if ($runtimeType.FullName -like 'System.Nullable``1*')
+
+        $argValue = $argList[$i]
+        $argType = Get-Type $argValue
+
+        $isByRef = $runtimeType.IsByRef
+        if ($isByRef)
         {
-            if ($null -eq $argList[$i])
+            if ($argList[$i] -isnot [ref]) { return $false }
+
+            $runtimeType = $runtimeType.GetElementType()
+            $argValue = $argValue.Value
+            $argType = Get-Type $argValue
+        }
+
+        $isNullNullable = $false
+
+        while ($runtimeType.FullName -like 'System.Nullable``1*')
+        {
+            if ($null -eq $argValue)
             {
-                continue
+                $isNullNullable = $true
+                break
             }
-                
+
             $runtimeType = $runtimeType.GetGenericArguments()[0]
         }
 
-        if ($null -eq $argList[$i])
+        if ($isNullNullable) { continue }
+
+        if ($null -eq $argValue)
         {
-            if ($runtimeType.IsValueType) { return $false }
+            if ($runtimeType.IsValueType)
+            {
+                return $false
+            }
+            else
+            {
+                continue
+            }
         }
         else
         {
-            if ($argList[$i].GetType() -eq $runtimeType) { continue }
+            if ($argType -ne $runtimeType)
+            {
+                $argValue = $argValue -as $runtimeType
+                if (-not $WithCoercion -or $null -eq $argValue)  { return $false }
+            }
 
-            $coercedValue = $argList[$i] -as $runtimeType
-            if (-not $WithCoercion -or $null -eq $coercedValue)  { return $false }
-
-            $argList[$i] = $coercedValue
+            if ($isByRef)
+            {
+                $argList[$i].Value = $argValue
+            }
+            else
+            {
+                $argList[$i] = $argValue
+            }
         }                    
 
     } # for ($i = 0; $i -lt $argList.Count; $i++)
@@ -262,7 +300,12 @@ function Resolve-RuntimeType
         $GenericType
     )
 
-    if ($ParameterType.IsGenericParameter)
+    if ($ParameterType.IsByRef)
+    {
+        $elementType = Resolve-RuntimeType -ParameterType $ParameterType.GetElementType() -RuntimeType $RuntimeType -GenericType $GenericType
+        return $elementType.MakeByRefType()
+    }
+    elseif ($ParameterType.IsGenericParameter)
     {
         for ($i = 0; $i -lt $GenericType.Count; $i++)
         {
@@ -317,6 +360,12 @@ function Resolve-RuntimeType
     }
 }
 
+function Get-Type($object)
+{
+    if ($null -eq $object) { return $null }
+    return $object.GetType()
+}
+
 Add-Type -ErrorAction Stop -TypeDefinition @'
     namespace PSGenericMethods
     {
@@ -342,10 +391,29 @@ Add-Type -ErrorAction Stop -TypeDefinition @'
                         {
                             args[i] = pso.BaseObject;
                         }
+
+                        PSReference psref = args[i] as PSReference;
+
+                        if (psref != null)
+                        {
+                            args[i] = psref.Value;
+                        }
                     }
                 }
 
-                return method.Invoke(target, args);
+                object result = method.Invoke(target, args);
+
+                for (int i = 0; i < arguments.Length; i++)
+                {
+                    PSReference psref = arguments[i] as PSReference;
+
+                    if (psref != null)
+                    {
+                        psref.Value = args[i];
+                    }
+                }
+
+                return result;
             }
         }
     }

@@ -52,17 +52,26 @@ $cSharp = @'
             return "GenericTypeParameterTest: " + parameter.ToString();
         }
 
-        public static string NonGenericTest(List<string> list)
-        {
-            if (null == list) { return string.Empty; }
-
-            return string.Join("\r\n", list.ToArray());
-        }
-
         public static string ArrayParameterTest<T>(T[] parameter)
         {
             if (parameter == null) { throw new ArgumentException("parameter"); }
             return parameter.GetType().FullName;
+        }
+
+        public static string OutParameterTest<T>(out T parameter, out string sparam)
+        {
+            parameter = default(T);
+            sparam = "Out Value";
+            return "OutParameterTest";
+        }
+
+        public static string RefParameterTest<T>(ref T parameter, ref string sparam)
+        {
+            string originalValue = sparam;
+
+            parameter = default(T);
+            sparam = "Out Value";
+            return String.Format("RefParameterTest: '{0}'", originalValue); 
         }
     }
 '@
@@ -73,37 +82,44 @@ Add-Type -TypeDefinition $cSharp
 
 $VerbosePreference = 'Continue'
 
-#Write-Verbose "Testing Static Method"
-#Invoke-GenericMethod -Type TestClass -GenericType int -ArgumentList ('StaticTest', '12345') -MethodName StaticCreateObject | Out-Host
-#
-#Write-Verbose 'Testing instance method'
-#$test = New-Object TestClass
-#$test | Invoke-GenericMethod -GenericType string -ArgumentList ('InstanceTest', 67890) -MethodName CreateObject | Out-Host
-#
-#Write-Verbose "Testing Static Method 2"
-#Invoke-GenericMethod -Type TestClass -GenericType string,bool -ArgumentList ($null, 'Ignore') -MethodName StaticCreateObject | Out-Host
-#
-#Write-Verbose "Testing method with default values (all arguments passed.)"
-#Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList ('Required Parameter', 'Optional Parameter') -MethodName DefaultParameterTest | Out-Host
-#
-#Write-Verbose "Testing method with default values (optional parameter left to default)"
-#Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList ('Required Parameter') -MethodName DefaultParameterTest | Out-Host
-#
-#Write-Verbose "Testing method with generic parameters"
-#$list = New-Object System.Collections.Generic.List[string]
-#$list.Add("This is a test.")
-#$list.Add("Line Two.")
-#Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList (,$list) -MethodName GenericTypeParameterTest | Out-Host
-#
-#Write-Verbose "Testing non-generic method with generic parameters"
-#
-## Verifying that the exception we're getting from Invoke when the method has a generic type argument is not caused by Invoke-GenericMethod specific code,
-## but affects all calls to methods with signatures like this.  Still need to figure out if there's a way to fix this.  Possibly by rewriting the Invoke-GenericMethod
-## function as a C# cmdlet (which would perform better anyway.)
-#
-#$method = [TestClass].GetMethod('NonGenericTest')
-#$method.Invoke($null, (,$list))
-#
+Write-Verbose "Testing Static Method"
+Invoke-GenericMethod -Type TestClass -GenericType int -ArgumentList ('StaticTest', '12345') -MethodName StaticCreateObject | Out-Host
 
+Write-Verbose 'Testing instance method'
+$test = New-Object TestClass
+$test | Invoke-GenericMethod -GenericType string -ArgumentList ('InstanceTest', 67890) -MethodName CreateObject | Out-Host
+
+Write-Verbose "Testing Static Method 2"
+Invoke-GenericMethod -Type TestClass -GenericType string,bool -ArgumentList ($null, 'Ignore') -MethodName StaticCreateObject | Out-Host
+
+Write-Verbose "Testing method with default values (all arguments passed.)"
+Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList ('Required Parameter', 'Optional Parameter') -MethodName DefaultParameterTest | Out-Host
+
+Write-Verbose "Testing method with default values (optional parameter left to default)"
+Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList ('Required Parameter') -MethodName DefaultParameterTest | Out-Host
+
+Write-Verbose "Testing method with generic parameters"
+$list = New-Object System.Collections.Generic.List[string]
+$list.Add("This is a test.")
+$list.Add("Line Two.")
+Invoke-GenericMethod -Type TestClass -GenericType string -ArgumentList (,$list) -MethodName GenericTypeParameterTest | Out-Host
+
+Write-Verbose "Testing method with generic array parameters"
 [int[]] $array = 1,2,3,4,5
 Invoke-GenericMethod -Type TestClass -MethodName ArrayParameterTest -GenericType int -ArgumentList (,$array)
+
+Write-Verbose "Testing method with out parameters."
+$int = 5
+$string = "Before Method Call."
+$args = ([ref]$int, [ref]$string)
+Invoke-GenericMethod -Type TestClass -MethodName OutParameterTest -GenericType int -ArgumentList $args
+
+Write-Host "int: '$int', string: '$string'"
+
+Write-Verbose "Testing method with ref parameters."
+$int = 5L
+$string = "Before Method Call."
+$args = ([ref]$int, [ref]$string)
+Invoke-GenericMethod -Type TestClass -MethodName RefParameterTest -GenericType int -ArgumentList $args
+
+Write-Host "int: '$int', string: '$string'"
