@@ -5,4 +5,4 @@ Tinkering with an Invoke-GenericMethod function to make calling generic methods 
 
 I've added code to handle $null arguments, and to perform some automatic type conversion, as we've come to expect from PowerShell (automatically converting numbers to Strings if needed, etc.)
 
-Still thinking of ways to try to break the function (introducing Generic types as parameters, etc), but it seems like a good start.
+So far, it seems to handle any combination of parameter / generic types that I can think to throw at it, but if you discover a way to make the function produce unexpected errors, please leave a report here and I'll get it taken care of.
