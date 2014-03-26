@@ -194,7 +194,7 @@ function Test-GenericMethodParameters
         $argList = @($ArgumentList.Value)
     }
 
-    if ($ParameterList.Count -lt $argList.Count) { continue }
+    if ($ParameterList.Count -lt $argList.Count) { return $false }
     
     for ($i = 0; $i -lt $argList.Count; $i++)
     {
