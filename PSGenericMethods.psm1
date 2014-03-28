@@ -58,7 +58,7 @@ function Invoke-GenericMethod
         $GenericType,
 
         [Object[]]
-        $ArgumentList = @()
+        $ArgumentList
     )
 
     process
@@ -80,7 +80,14 @@ function Invoke-GenericMethod
             }
         }
 
-        $argList = $argumentList.Clone()
+        if ($null -ne $ArgumentList)
+        {
+            $argList = $ArgumentList.Clone()
+        }
+        else
+        {
+            $argList = @()
+        }
 
         $params = @{
             Type         = $_type
