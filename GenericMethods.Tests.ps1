@@ -156,18 +156,11 @@ Describing 'GenericMethods' {
             $bool = $true
 
             Invoke-GenericMethod -Type TestClass -MethodName OutParameterTest -GenericType bool -ArgumentList ([ref]$bool, [ref]$string) |
-            ForEach-Object {
-                @{
-                    ReturnValue = $_
-                    String = $string
-                    Bool = $bool
-                }
-            } |
-            Should Equal @{
-                ReturnValue = 'OutParameterTest'
-                String = 'Out Value'
-                Bool = $false
+            Should {
+                param ($Value)
+                $Value -eq 'OutParameterTest' -and $string -eq 'Out Value' -and $bool -eq $false
             }
+            
         }
     }
 
@@ -177,17 +170,9 @@ Describing 'GenericMethods' {
             $bool = $true
 
             Invoke-GenericMethod -Type TestClass -MethodName RefParameterTest -GenericType bool -ArgumentList ([ref]$bool, [ref]$string) |
-            ForEach-Object {
-                @{
-                    ReturnValue = $_
-                    String = $string
-                    Bool = $bool
-                }
-            } |
-            Should Equal @{
-                ReturnValue = "RefParameterTest: 'Original Value'"
-                String = 'Out Value'
-                Bool = $false
+            Should {
+                param ($Value)
+                $Value -eq "RefParameterTest: 'Original Value'" -and $string -eq 'Out Value' -and $bool -eq $false
             }
         }
     }
@@ -197,15 +182,9 @@ Describing 'GenericMethods' {
             $ref = $null
 
             Invoke-GenericMethod -Type TestClass -MethodName NullableRefTest -GenericType string -ArgumentList @([ref] $ref) |
-            ForEach-Object {
-                @{
-                    ReturnValue = $_
-                    Ref = $ref
-                }
-            } |
-            Should Equal @{
-                ReturnValue = "NullableRefTest: OriginalValue null"
-                Ref = 5
+            Should {
+                param ($Value)
+                $Value -eq 'NullableRefTest: OriginalValue null' -and $ref -eq 5
             }
         }
 
@@ -213,15 +192,9 @@ Describing 'GenericMethods' {
             $ref = 10
 
             Invoke-GenericMethod -Type TestClass -MethodName NullableRefTest -GenericType string -ArgumentList @([ref] $ref) |
-            ForEach-Object {
-                @{
-                    ReturnValue = $_
-                    Ref = $ref
-                }
-            } |
-            Should Equal @{
-                ReturnValue = "NullableRefTest: OriginalValue '10'"
-                Ref = 5
+            Should {
+                param ($Value)
+                $Value -eq "NullableRefTest: OriginalValue '10'" -and $ref -eq 5
             }
         }
 
@@ -229,16 +202,11 @@ Describing 'GenericMethods' {
             $ref = 10L
             
             Invoke-GenericMethod -Type TestClass -MethodName NullableRefTest -GenericType string -ArgumentList @([ref] $ref) |
-            ForEach-Object {
-                @{
-                    ReturnValue = $_
-                    Ref = $ref
-                }
-            } |
-            Should Equal @{
-                ReturnValue = "NullableRefTest: OriginalValue '10'"
-                Ref = 5
-            }        }
+            Should {
+                param ($Value)
+                $Value -eq "NullableRefTest: OriginalValue '10'" -and $ref -eq 5
+            }
+        }
     }
 
     Given 'An instance method' {
