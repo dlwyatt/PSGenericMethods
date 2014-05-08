@@ -1,5 +1,5 @@
 Describing 'GenericMethods' {
-    Import-Module -Name $TestScriptPath\PSGenericMethods.psm1 -Force -ErrorAction Stop
+    Import-Module -Name $TestScriptPath\GenericMethods.psm1 -Force -ErrorAction Stop
 
     $cSharp = @'
         using System;
