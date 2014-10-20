@@ -1,6 +1,8 @@
-Describing 'GenericMethods' {
-    Import-Module -Name $TestScriptPath\GenericMethods.psm1 -Force -ErrorAction Stop
+$scriptRoot = Split-Path -Path $MyInvocation.MyCommand.Path
 
+Import-Module -Name $scriptRoot\GenericMethods.psm1 -Force -ErrorAction Stop
+
+Describe 'GenericMethods' {
     $cSharp = @'
         using System;
         using System.Management.Automation;
@@ -65,7 +67,7 @@ Describing 'GenericMethods' {
 
                 parameter = default(T);
                 sparam = "Out Value";
-                return String.Format("RefParameterTest: '{0}'", originalValue); 
+                return String.Format("RefParameterTest: '{0}'", originalValue);
             }
 
             public static string NullableRefTest<T>(ref int? parameter)
@@ -89,44 +91,43 @@ Describing 'GenericMethods' {
 
     Add-Type -TypeDefinition $cSharp -ErrorAction Stop
 
-    
-    Given 'A static method with no parameters' {
+    Context 'A static method with no parameters' {
         It 'Returns the generic type''s full name' {
             Invoke-GenericMethod -Type TestClass -MethodName StaticMethodNoParameters -GenericType psobject |
-            Should Equal ([psobject].FullName)
+            Should Be ([psobject].FullName)
         }
     }
 
-    Given 'A method with a generic return type' {
+    Context 'A method with a generic return type' {
         It 'Returns the default value for Numeric types' {
             Invoke-GenericMethod -Type TestClass -MethodName GetDefaultValue -GenericType int |
-            Should Equal 0
+            Should Be 0
         }
 
         It 'Returns the default value for Boolean types' {
             Invoke-GenericMethod -Type TestClass -MethodName GetDefaultValue -GenericType bool |
-            Should Equal $false
+            Should Be $false
         }
 
         It 'Returns the default value for Reference types' {
             Invoke-GenericMethod -Type TestClass -MethodName GetDefaultValue -GenericType System.IO.FileInfo |
-            Should Equal $null
+            Should Be $null
         }
     }
 
-    Given 'A method with optional parameters (default values)' {
+    Context 'A method with optional parameters (default values)' {
         It 'Returns the specified value' {
             Invoke-GenericMethod -Type TestClass -MethodName DefaultParameterTest -GenericType string -ArgumentList 'Required Parameter', 'Optional Parameter' |
-            Should Equal "'Required Parameter', 'Optional Parameter'"
+            Should Be "'Required Parameter', 'Optional Parameter'"
         }
 
         It 'Returns the default value' {
             Invoke-GenericMethod -Type TestClass -MethodName DefaultParameterTest -GenericType string -ArgumentList 'Required Parameter' |
-            Should Equal "'Required Parameter', 'Default value'"
+            Should Be "'Required Parameter', 'Default value'"
         }
     }
 
-    Given 'A method with parameters that are Generic types' {
+    Context 'A method with parameters that are Generic types' {
         It 'Resolves the runtime types correctly (Test 1: Generic parameter type based on method generic type)' {
             Invoke-GenericMethod -Type TestClass -MethodName GenericTypeParameterTest -GenericType string -ArgumentList (,(New-Object System.Collections.Generic.List[string])) |
             Should Match '^System\.Collections\.Generic\.List`1\[\[System\.String'
@@ -143,85 +144,78 @@ Describing 'GenericMethods' {
         }
     }
 
-    Given 'A method with a parameter that is an array of the method''s generic type' {
+    Context 'A method with a parameter that is an array of the method''s generic type' {
         It 'Resolves runtime types correctly' {
             Invoke-GenericMethod -Type TestClass -MethodName ArrayParameterTest -GenericType string -ArgumentList (,(New-Object string[](4))) |
-            Should Equal System.String[]
+            Should Be 'System.String[]'
         }
     }
 
-    Given 'A method with "out" parameters' {
+    Context 'A method with "out" parameters' {
         It 'Assigns the default boolean value to the generic out parameter, and the value "Out Value" to the out string parameter.' {
             $string = $null
             $bool = $true
 
-            Invoke-GenericMethod -Type TestClass -MethodName OutParameterTest -GenericType bool -ArgumentList ([ref]$bool, [ref]$string) |
-            Should {
-                param ($Value)
-                $Value -eq 'OutParameterTest' -and $string -eq 'Out Value' -and $bool -eq $false
-            }
-            
+            $result = Invoke-GenericMethod -Type TestClass -MethodName OutParameterTest -GenericType bool -ArgumentList ([ref]$bool, [ref]$string)
+
+            $result | Should Be 'OutParameterTest'
+            $string | Should Be 'Out Value'
+            $bool | Should Be $false
         }
     }
 
-    Given 'A method with "ref" parameters' {
+    Context 'A method with "ref" parameters' {
         It 'Assigns the default boolean value to the generic ref parameter, and the value "Out Value" to the ref string parameter.' {
             $string = 'Original Value'
             $bool = $true
 
-            Invoke-GenericMethod -Type TestClass -MethodName RefParameterTest -GenericType bool -ArgumentList ([ref]$bool, [ref]$string) |
-            Should {
-                param ($Value)
-                $Value -eq "RefParameterTest: 'Original Value'" -and $string -eq 'Out Value' -and $bool -eq $false
-            }
+            $result = Invoke-GenericMethod -Type TestClass -MethodName RefParameterTest -GenericType bool -ArgumentList ([ref]$bool, [ref]$string)
+
+            $result | Should Be "RefParameterTest: 'Original Value'"
+            $string | Should Be 'Out Value'
+            $bool | Should Be $false
         }
     }
 
-    Given 'A method with Nullable Ref parameters' {
+    Context 'A method with Nullable Ref parameters' {
         It 'Correctly resolves the runtime types, the original null value, and assigns a value of 5 to the reference parameter' {
             $ref = $null
+            $result = Invoke-GenericMethod -Type TestClass -MethodName NullableRefTest -GenericType string -ArgumentList @([ref] $ref)
 
-            Invoke-GenericMethod -Type TestClass -MethodName NullableRefTest -GenericType string -ArgumentList @([ref] $ref) |
-            Should {
-                param ($Value)
-                $Value -eq 'NullableRefTest: OriginalValue null' -and $ref -eq 5
-            }
+            $result | Should Be 'NullableRefTest: OriginalValue null'
+            $ref | Should Be 5
         }
 
         It 'Correctly resolves the runtime types, the original non-null value, and assigns a value of 5 to the reference parameter' {
             $ref = 10
+            $result = Invoke-GenericMethod -Type TestClass -MethodName NullableRefTest -GenericType string -ArgumentList @([ref] $ref)
 
-            Invoke-GenericMethod -Type TestClass -MethodName NullableRefTest -GenericType string -ArgumentList @([ref] $ref) |
-            Should {
-                param ($Value)
-                $Value -eq "NullableRefTest: OriginalValue '10'" -and $ref -eq 5
-            }
+            $result | Should Be "NullableRefTest: OriginalValue '10'"
+            $ref | Should Be 5
         }
 
         It 'Performs type conversion when an exact method signature is not found' {
             $ref = 10L
-            
-            Invoke-GenericMethod -Type TestClass -MethodName NullableRefTest -GenericType string -ArgumentList @([ref] $ref) |
-            Should {
-                param ($Value)
-                $Value -eq "NullableRefTest: OriginalValue '10'" -and $ref -eq 5
-            }
+            $result = Invoke-GenericMethod -Type TestClass -MethodName NullableRefTest -GenericType string -ArgumentList @([ref] $ref)
+
+            $result | Should Be "NullableRefTest: OriginalValue '10'"
+            $ref | Should Be 5
         }
     }
 
-    Given 'An instance method' {
+    Context 'An instance method' {
         It 'Invokes the instance method using -InputObject' {
             $object = New-Object TestClass
 
             Invoke-GenericMethod -InputObject $object -MethodName InstanceMethodNoParameters -GenericType psobject |
-            Should Equal ([psobject].FullName)
+            Should Be ([psobject].FullName)
         }
-        
+
         It 'Invokes the instance method using pipeline input' {
             $object = New-Object TestClass
 
             $object | Invoke-GenericMethod -MethodName InstanceMethodNoParameters -GenericType psobject |
-            Should Equal ([psobject].FullName)
+            Should Be ([psobject].FullName)
         }
     }
 }
