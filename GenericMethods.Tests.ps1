@@ -86,6 +86,11 @@ Describe 'GenericMethods' {
                 parameter = 5;
                 return message;
             }
+
+            public static string ParamsArgumentTest<T>(params T[] values)
+            {
+                return string.Format("T: {0} , values: {1}", typeof(T).FullName, string.Join(" ", values));
+            }
         }
 '@
 
@@ -216,6 +221,15 @@ Describe 'GenericMethods' {
 
             $object | Invoke-GenericMethod -MethodName InstanceMethodNoParameters -GenericType psobject |
             Should Be ([psobject].FullName)
+        }
+    }
+
+    Context 'Method with params argument' {
+        $strings = 'One', 'Two', 'Three', 'Four', 'Five'
+
+        It 'Invokes the method with a params argument' {
+            Invoke-GenericMethod -Type TestClass -MethodName ParamsArgumentTest -GenericType string -ArgumentList $strings -ErrorAction Stop |
+            Should Be 'T: System.String , values: One Two Three Four Five'
         }
     }
 }
