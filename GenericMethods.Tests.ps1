@@ -25,11 +25,6 @@ Describe 'GenericMethods' {
                 return default(T);
             }
 
-            public static string DefaultParameterTest<T> (string required, string optional = "Default value")
-            {
-                return string.Format("'{0}', '{1}'", required, optional);
-            }
-
             public static string GenericTypeParameterTest<T> (List<T> parameter)
             {
                 if (parameter == null) { throw new ArgumentNullException("parameter"); }
@@ -87,7 +82,7 @@ Describe 'GenericMethods' {
                 return message;
             }
 
-            public static string ParamsArgumentTest<T>(params T[] values)
+            public static string ParamsArgumentTest<T>(params string[] values)
             {
                 return string.Format("T: {0} , values: {1}", typeof(T).FullName, string.Join(" ", values));
             }
@@ -95,6 +90,26 @@ Describe 'GenericMethods' {
 '@
 
     Add-Type -TypeDefinition $cSharp -ErrorAction Stop
+
+    if ($PSVersionTable.PSVersion.Major -ge 3)
+    {
+        $cSharp = @'
+            using System;
+            using System.Management.Automation;
+            using System.Collections.Generic;
+
+            public class TestClass2
+            {
+                public static string DefaultParameterTest<T> (string required, string optional = "Default value")
+                {
+                    return string.Format("'{0}', '{1}'", required, optional);
+                }
+            }
+'@
+
+        Add-Type -TypeDefinition $cSharp -ErrorAction Stop
+    }
+
 
     Context 'A static method with no parameters' {
         It 'Returns the generic type''s full name' {
@@ -120,15 +135,18 @@ Describe 'GenericMethods' {
         }
     }
 
-    Context 'A method with optional parameters (default values)' {
-        It 'Returns the specified value' {
-            Invoke-GenericMethod -Type TestClass -MethodName DefaultParameterTest -GenericType string -ArgumentList 'Required Parameter', 'Optional Parameter' |
-            Should Be "'Required Parameter', 'Optional Parameter'"
-        }
+    if ($PSVersionTable.PSVersion.Major -ge 3)
+    {
+        Context 'A method with optional parameters (default values)' {
+            It 'Returns the specified value' {
+                Invoke-GenericMethod -Type TestClass2 -MethodName DefaultParameterTest -GenericType string -ArgumentList 'Required Parameter', 'Optional Parameter' |
+                Should Be "'Required Parameter', 'Optional Parameter'"
+            }
 
-        It 'Returns the default value' {
-            Invoke-GenericMethod -Type TestClass -MethodName DefaultParameterTest -GenericType string -ArgumentList 'Required Parameter' |
-            Should Be "'Required Parameter', 'Default value'"
+            It 'Returns the default value' {
+                Invoke-GenericMethod -Type TestClass2 -MethodName DefaultParameterTest -GenericType string -ArgumentList 'Required Parameter' |
+                Should Be "'Required Parameter', 'Default value'"
+            }
         }
     }
 
@@ -228,8 +246,8 @@ Describe 'GenericMethods' {
         $strings = 'One', 'Two', 'Three', 'Four', 'Five'
 
         It 'Invokes the method with a params argument' {
-            Invoke-GenericMethod -Type TestClass -MethodName ParamsArgumentTest -GenericType string -ArgumentList $strings -ErrorAction Stop |
-            Should Be 'T: System.String , values: One Two Three Four Five'
+            $result = Invoke-GenericMethod -Type TestClass -MethodName ParamsArgumentTest -GenericType object -ArgumentList $strings -ErrorAction Stop
+            $result | Should Be 'T: System.Object , values: One Two Three Four Five'
         }
     }
 }
