@@ -157,7 +157,7 @@ function Get-GenericMethod
         if (-not $method.IsGenericMethod -or $method.Name -ne $MethodName) { continue }
         if ($GenericType.Count -ne $method.GetGenericArguments().Count) { continue }
 
-        if (Test-GenericMethodParameters -ParameterList $method.GetParameters() -ArgumentList ([ref]$argList) -GenericType $GenericType -WithCoercion:$WithCoercion)
+        if (Test-GenericMethodParameters -MethodInfo $method -ArgumentList ([ref]$argList) -GenericType $GenericType -WithCoercion:$WithCoercion)
         {
             $ArgumentList.Value = $argList
             return $method.MakeGenericMethod($GenericType)
@@ -176,10 +176,7 @@ function Test-GenericMethodParameters
 {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true)]
-        [AllowEmptyCollection()]
-        [System.Reflection.ParameterInfo[]]
-        $ParameterList,
+        [System.Reflection.MethodInfo] $MethodInfo,
 
         [ref]
         $ArgumentList,
@@ -201,108 +198,42 @@ function Test-GenericMethodParameters
         $argList = @($ArgumentList.Value)
     }
 
-    $hasParamsArray = $ParameterList.Count -gt 0 -and @($ParameterList[-1].GetCustomAttributes([System.ParamArrayAttribute], $true)).Count -gt 0
+    $parameterList = $MethodInfo.GetParameters()
 
-    if ($ParameterList.Count -lt $argList.Count -and -not $hasParamsArray)
+    $arrayType = $null
+
+    $hasParamsArray = HasParamsArray -ParameterList $parameterList
+
+    if ($parameterList.Count -lt $argList.Count -and -not $hasParamsArray)
     {
         return $false
     }
 
+    $methodGenericType = $MethodInfo.GetGenericArguments()
+
     for ($i = 0; $i -lt $argList.Count; $i++)
     {
         $params = @{
-            ParameterType = $ParameterList[$i].ParameterType
-            RuntimeType   = $GenericType
-            GenericType   = $method.GetGenericArguments()
+            ArgumentList       = $argList
+            ParameterList      = $ParameterList
+            WithCoercion       = $WithCoercion
+            RuntimeGenericType = $GenericType
+            MethodGenericType  = $methodGenericType
+            Index              = [ref]$i
+            ArrayType          = [ref]$arrayType
         }
 
-        $runtimeType = Resolve-RuntimeType @params
+        $isOk = TryMatchParameter @params
 
-        if ($null -eq $runtimeType)
-        {
-            throw "Could not determine runtime type of parameter '$($ParameterList[$i].Name)'"
-        }
-
-        $isParamsArray = @($ParameterList[$i].GetCustomAttributes([System.ParamArrayAttribute], $true)).Count -gt 0
-
-        if ($isParamsArray)
-        {
-            $firstArrayIndex = $i
-            $arrayType = $runtimeType
-            $runtimeType = $runtimeType.GetElementType()
-        }
-
-        do
-        {
-            $argValue = $argList[$i]
-            $argType = Get-Type $argValue
-
-            $isByRef = $runtimeType.IsByRef
-            if ($isByRef)
-            {
-                if ($argList[$i] -isnot [ref]) { return $false }
-
-                $runtimeType = $runtimeType.GetElementType()
-                $argValue = $argValue.Value
-                $argType = Get-Type $argValue
-            }
-
-            $isNullNullable = $false
-
-            while ($runtimeType.FullName -like 'System.Nullable``1*')
-            {
-                if ($null -eq $argValue)
-                {
-                    $isNullNullable = $true
-                    break
-                }
-
-                $runtimeType = $runtimeType.GetGenericArguments()[0]
-            }
-
-            if ($isNullNullable) { continue }
-
-            if ($null -eq $argValue)
-            {
-                if ($runtimeType.IsValueType)
-                {
-                    return $false
-                }
-                else
-                {
-                    continue
-                }
-            }
-            else
-            {
-                if ($argType -ne $runtimeType)
-                {
-                    $argValue = $argValue -as $runtimeType
-                    if (-not $WithCoercion -or $null -eq $argValue)  { return $false }
-                }
-
-                if ($isByRef)
-                {
-                    $argList[$i].Value = $argValue
-                }
-                else
-                {
-                    $argList[$i] = $argValue
-                }
-            }
-
-            if ($isParamsArray) { $i++ }
-
-        } while ($isParamsArray -and $i -lt $argList.Count)
-
-    } # for ($i = 0; $i -lt $argList.Count; $i++)
+        if (-not $isOk) { return $false }
+    }
 
     $defaults = New-Object System.Collections.ArrayList
 
-    for ($i = $argList.Count; $i -lt $ParameterList.Count; $i++)
+    for ($i = $argList.Count; $i -lt $parameterList.Count; $i++)
     {
-        if (-not $ParameterList[$i].HasDefaultValue)  { return $false }
-        $null = $defaults.Add($ParameterList[$i].DefaultValue)
+        if (-not $parameterList[$i].HasDefaultValue)  { return $false }
+        $null = $defaults.Add($parameterList[$i].DefaultValue)
     }
 
     # When calling a method with a params array using MethodInfo, you have to pass in the array; the
@@ -310,8 +241,11 @@ function Test-GenericMethodParameters
 
     if ($hasParamsArray)
     {
+        $firstArrayIndex = $parameterList.Count - 1
+        $lastArrayIndex = $argList.Count - 1
+
         $newArgList = $argList[0..$firstArrayIndex]
-        $newArgList[$firstArrayIndex] = $argList[$firstArrayIndex..($argList.Count - 1)] -as $arrayType
+        $newArgList[$firstArrayIndex] = $argList[$firstArrayIndex..$lastArrayIndex] -as $arrayType
         $argList = $newArgList
     }
 
@@ -320,6 +254,147 @@ function Test-GenericMethodParameters
     return $true
 
 } # function Test-GenericMethodParameters
+
+function TryMatchParameter
+{
+    param (
+        [System.Reflection.ParameterInfo[]]
+        $ParameterList,
+
+        [object[]]
+        $ArgumentList,
+
+        [Type[]]
+        $MethodGenericType,
+
+        [Type[]]
+        $RuntimeGenericType,
+
+        [switch]
+        $WithCoercion,
+
+        [ref] $Index,
+        [ref] $ArrayType
+    )
+
+    $params = @{
+        ParameterType = $ParameterList[$Index.Value].ParameterType
+        RuntimeType   = $RuntimeGenericType
+        GenericType   = $MethodGenericType
+    }
+
+    $runtimeType = Resolve-RuntimeType @params
+
+    if ($null -eq $runtimeType)
+    {
+        throw "Could not determine runtime type of parameter '$($ParameterList[$Index.Value].Name)'"
+    }
+
+    $isParamsArray = IsParamsArray -ParameterInfo $ParameterList[$Index.Value]
+
+    if ($isParamsArray)
+    {
+        $ArrayType.Value = $runtimeType
+        $runtimeType     = $runtimeType.GetElementType()
+    }
+
+    do
+    {
+        $isOk = TryMatchArgument @PSBoundParameters -RuntimeType $runtimeType
+        if (-not $isOk) { return $false }
+
+        if ($isParamsArray) { $Index.Value++ }
+    }
+    while ($isParamsArray -and $Index.Value -lt $ArgumentList.Count)
+
+    return $true
+}
+
+function TryMatchArgument
+{
+    param (
+        [System.Reflection.ParameterInfo[]]
+        $ParameterList,
+
+        [object[]]
+        $ArgumentList,
+
+        [Type[]]
+        $MethodGenericType,
+
+        [Type[]]
+        $RuntimeGenericType,
+
+        [switch]
+        $WithCoercion,
+
+        [ref] $Index,
+        [ref] $ArrayType,
+
+        [Type] $RuntimeType
+    )
+
+    $argValue = $ArgumentList[$Index.Value]
+    $argType = Get-Type $argValue
+
+    $isByRef = $RuntimeType.IsByRef
+    if ($isByRef)
+    {
+        if ($ArgumentList[$Index.Value] -isnot [ref]) { return $false }
+
+        $RuntimeType = $RuntimeType.GetElementType()
+        $argValue = $argValue.Value
+        $argType = Get-Type $argValue
+    }
+
+    $isNullNullable = $false
+
+    while ($RuntimeType.FullName -like 'System.Nullable``1*')
+    {
+        if ($null -eq $argValue)
+        {
+            $isNullNullable = $true
+            break
+        }
+
+        $RuntimeType = $RuntimeType.GetGenericArguments()[0]
+    }
+
+    if ($isNullNullable) { continue }
+
+    if ($null -eq $argValue)
+    {
+        return -not $RuntimeType.IsValueType
+    }
+    else
+    {
+        if ($argType -ne $RuntimeType)
+        {
+            $argValue = $argValue -as $RuntimeType
+            if (-not $WithCoercion -or $null -eq $argValue)  { return $false }
+        }
+
+        if ($isByRef)
+        {
+            $ArgumentList[$Index.Value].Value = $argValue
+        }
+        else
+        {
+            $ArgumentList[$Index.Value] = $argValue
+        }
+    }
+
+    return $true
+}
+function HasParamsArray([System.Reflection.ParameterInfo[]] $ParameterList)
+{
+    return $ParameterList.Count -gt 0 -and (IsParamsArray -ParameterInfo $ParameterList[-1])
+}
+
+function IsParamsArray([System.Reflection.ParameterInfo] $ParameterInfo)
+{
+    return @($ParameterInfo.GetCustomAttributes([System.ParamArrayAttribute], $true)).Count -gt 0
+}
 
 function Resolve-RuntimeType
 {
