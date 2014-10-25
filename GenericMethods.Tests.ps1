@@ -82,9 +82,9 @@ Describe 'GenericMethods' {
                 return message;
             }
 
-            public static string ParamsArgumentTest<T>(params string[] values)
+            public static string ParamsArgumentTest<T>(int required, params string[] values)
             {
-                return string.Format("T: {0} , values: {1}", typeof(T).FullName, string.Join(" ", values));
+                return string.Format("T: {0}, required: {1}, values: {2}", typeof(T).FullName, required, string.Join(" ", values));
             }
         }
 '@
@@ -243,11 +243,11 @@ Describe 'GenericMethods' {
     }
 
     Context 'Method with params argument' {
-        $strings = 'One', 'Two', 'Three', 'Four', 'Five'
+        $arguments = 10, 'One', 'Two', 'Three', 'Four', 'Five'
 
         It 'Invokes the method with a params argument' {
-            $result = Invoke-GenericMethod -Type TestClass -MethodName ParamsArgumentTest -GenericType object -ArgumentList $strings -ErrorAction Stop
-            $result | Should Be 'T: System.Object , values: One Two Three Four Five'
+            $result = Invoke-GenericMethod -Type TestClass -MethodName ParamsArgumentTest -GenericType object -ArgumentList $arguments -ErrorAction Stop
+            $result | Should Be 'T: System.Object, required: 10, values: One Two Three Four Five'
         }
     }
 }
