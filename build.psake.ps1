@@ -33,7 +33,7 @@ Task Build -depends Test {
 }
 
 Task Sign {
-    $CertThumbprint = 'A2E6B086AC438B5480365B2D5E48BB25F9BE69B3'
+    $CertThumbprint = '20164DCA86BDFBB5B345AF85F5DB54E9AFFA3F30'
     $TimestampURL   = 'http://timestamp.digicert.com'
 
     $cert = $(Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Thumbprint -eq $CertThumbprint -and $_.PrivateKey -is [System.Security.Cryptography.RSACryptoServiceProvider] } )
