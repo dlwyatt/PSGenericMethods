@@ -50,6 +50,6 @@ Task Sign {
     )
 
     Get-ChildItem -Path $buildTarget\* -Include *.ps1, *.psm1, *.psd1, *.dll |
-    Set-AuthenticodeSignature -Certificate $cert -TimestampServer $TimestampURL -Force -IncludeChain All -ErrorAction Stop |
+    Set-AuthenticodeSignature -Certificate $cert -TimestampServer $TimestampURL -Force -IncludeChain All -ErrorAction Stop -HashAlgorithm SHA256 |
     Format-Table -Property $properties -AutoSize
 }
