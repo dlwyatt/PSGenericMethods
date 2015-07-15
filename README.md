@@ -1,3 +1,5 @@
+__Build Status:__ [![Build status](https://build.powershell.org/guestAuth/app/rest/builds/buildType:(id:GenericMethods_PublishStatusToGitHub)/statusIcon)](https://build.powershell.org/project.html?projectId=GenericMethods&tab=projectOverview&guest=1)
+
 PSGenericMethods
 ================
 
