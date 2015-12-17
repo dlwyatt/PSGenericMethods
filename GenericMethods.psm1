@@ -34,10 +34,6 @@ function Invoke-GenericMethod
     .OUTPUTS
        System.Object
     .NOTES
-       Known issues:
-
-       Ref / Out parameters and [PSReference] objects are currently not working properly, and I don't think there's a way to fix that from within PowerShell.  I'll have to expand on the
-       PSGenericTypes.MethodInvoker.InvokeMethod() C# code to account for that.
     #>
 
     [CmdletBinding(DefaultParameterSetName = 'Instance')]
